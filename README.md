@@ -17,6 +17,17 @@ modern browser on Windows, macOS, or Linux.
 - **Server-side caching** to stay well within GitHub's rate limits
 - **Optional token support** to raise the GitHub API rate limit
 
+## 一键启动（Windows）
+
+仓库根目录提供了 **`start.bat`**，双击即可运行：
+
+- 自动检查 Node.js（未安装会提示去官网下载）
+- 首次运行自动安装依赖（`npm install`）
+- 自动打开浏览器访问 http://localhost:3000
+- 默认以生产模式启动（已构建则直接 `npm start`），失败时自动回退到开发模式
+
+> 生产模式需要先构建一次。如果还没有构建，请先在项目目录执行 `npm run build`，或直接双击 `start.bat` 让它走开发模式。
+
 ## Quick start (local development)
 
 Requires [Node.js](https://nodejs.org/) 20+.
@@ -30,6 +41,12 @@ npm run dev
 
 # 3. Open http://localhost:3000
 ```
+
+## 语言切换 / Language
+
+界面默认显示**中文**。右上角有语言切换按钮，可在中文 / English 之间切换，选择会保存在浏览器本地（localStorage）。
+
+The UI defaults to **Chinese**. Use the toggle in the top-right corner to switch between Chinese and English; the choice is remembered in your browser.
 
 ## Production build (local / server, without Docker)
 

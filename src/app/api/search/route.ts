@@ -26,8 +26,14 @@ export async function GET(request: Request) {
   });
 
   if (!result.ok) {
+    const errorCode =
+      result.status === 429
+        ? "rate_limited"
+        : result.status === 502
+          ? "upstream_unreachable"
+          : "unknown";
     return NextResponse.json(
-      { error: result.error },
+      { error: result.error, errorCode },
       { status: result.status }
     );
   }
