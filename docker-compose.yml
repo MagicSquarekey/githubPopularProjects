@@ -1,0 +1,10 @@
+services:
+  web:
+    build: .
+    ports:
+      - "3000:3000"
+    environment:
+      # Optional: raise GitHub API rate limit from 10 req/min to ~1800 req/hr.
+      # Create a token at https://github.com/settings/tokens (no scopes needed).
+      GITHUB_TOKEN: ${GITHUB_TOKEN:-}
+    restart: unless-stopped
