@@ -2,7 +2,7 @@ export type Locale = "zh" | "en";
 
 /** Flat message dictionary. Keys map to [zh, en] pairs. */
 export const messages = {
-  appTitle: ["githubPopularProjects", "githubPopularProjects"],
+  appTitle: ["github热门项目", "githubPopularProjects"],
   appSubtitle: [
     "发现 GitHub 热门项目 — 浏览热门榜单，或按语言、Star、关键词搜索",
     "Discover trending GitHub repositories — browse trending lists or search by language, stars, and keywords",

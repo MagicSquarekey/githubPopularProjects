@@ -4,7 +4,7 @@ import { ThemeProvider } from "@/components/ThemeProvider";
 import { LocaleProvider } from "@/components/LocaleProvider";
 
 export const metadata: Metadata = {
-  title: "githubPopularProjects — Discover trending GitHub projects",
+  title: "githubPopularProjects — 发现 GitHub 热门项目 / Discover trending GitHub projects",
   description:
     "Browse GitHub trending repositories and search by language, stars, and keywords. Open source, self-hostable, cross-platform.",
   icons: {
