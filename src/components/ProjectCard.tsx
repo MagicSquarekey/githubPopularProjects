@@ -1,5 +1,13 @@
 import { languageColor, formatCount } from "@/lib/languages";
-import type { Repository } from "@/lib/types";
+import type { Repository, TrendingSortKey } from "@/lib/types";
+
+function rankBadgeValue(
+  repo: Repository,
+  sort: TrendingSortKey
+): number | null {
+  if (sort === "total") return null;
+  return repo.starsInPeriod[sort];
+}
 
 function StarIcon() {
   return (
@@ -34,7 +42,19 @@ function LicenseIcon() {
   );
 }
 
-export function ProjectCard({ repo, rank }: { repo: Repository; rank?: number }) {
+export function ProjectCard({
+  repo,
+  rank,
+  trendingSort,
+}: {
+  repo: Repository;
+  rank?: number;
+  trendingSort?: TrendingSortKey;
+}) {
+  const periodGain =
+    trendingSort && trendingSort !== "total"
+      ? rankBadgeValue(repo, trendingSort)
+      : null;
   return (
     <div className="group relative flex h-full flex-col rounded-xl border border-gray-200 bg-white p-5 transition-all hover:border-gray-300 hover:shadow-md dark:border-gray-800 dark:bg-gray-900 dark:hover:border-gray-700">
       {rank !== undefined && (
@@ -102,9 +122,9 @@ export function ProjectCard({ repo, rank }: { repo: Repository; rank?: number })
           <ForkIcon />
           {formatCount(repo.forks)}
         </span>
-        {repo.starsSince !== null && repo.starsSince > 0 && (
+        {periodGain !== null && periodGain > 0 && (
           <span className="font-medium text-green-600 dark:text-green-400">
-            +{formatCount(repo.starsSince)} ★
+            +{formatCount(periodGain)} ★
           </span>
         )}
         {repo.openIssues > 0 && (

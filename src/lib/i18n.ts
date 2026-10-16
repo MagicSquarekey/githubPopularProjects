@@ -18,10 +18,26 @@ export const messages = {
   modeTrending: ["热门榜单", "Trending"],
   modeSearch: ["搜索", "Search"],
 
+  // Trending dimension tabs
+  trendDaily: ["今日新增 Star", "Stars today"],
+  trendWeekly: ["本周新增 Star", "Stars this week"],
+  trendMonthly: ["本月新增 Star", "Stars this month"],
+  trendTotal: ["总 Star", "Total stars"],
+  dimensionLabel: ["榜单维度", "Ranking"],
+
+  // Pagination / hint
+  viewMore: ["查看更多", "View more"],
+  loadingMore: ["加载中…", "Loading…"],
+  noMoreHint: [
+    "受限于当前榜单数据来源，暂无法加载更多。",
+    "No more results available from the current data source.",
+  ],
+  trendingNote: [
+    "榜单基于 GitHub 官方 Trending 页面。",
+    "Rankings are based on GitHub's official Trending page.",
+  ],
+
   // Trending filters
-  sinceToday: ["今日", "Today"],
-  sinceWeek: ["本周", "This week"],
-  sinceMonth: ["本月", "This month"],
   filterLanguage: ["筛选语言", "Language"],
 
   // Search form
@@ -37,7 +53,6 @@ export const messages = {
   // Results
   resultCountTrending: ["共 {n} 个热门仓库", "{n} trending repositories"],
   resultCountSearch: ["找到 {n} 个仓库", "{n} repositories found"],
-  loadMore: ["加载更多 →", "Load more →"],
   prevPage: ["← 上一页", "← Previous page"],
 
   // States

@@ -1,3 +1,9 @@
+export type StarPeriod = {
+  daily: number | null;
+  weekly: number | null;
+  monthly: number | null;
+};
+
 export type Repository = {
   id: number;
   name: string;
@@ -16,12 +22,11 @@ export type Repository = {
   createdAt: string;
   updatedAt: string;
   pushedAt: string;
-  // Trending-specific fields (null for search results)
-  starsToday: number | null;
-  starsSince: number | null;
+  // Stars gained in each trending window (null when not present in that window).
+  starsInPeriod: StarPeriod;
 };
 
-export type TrendingSince = "daily" | "weekly" | "monthly";
+export type TrendingSortKey = "daily" | "weekly" | "monthly" | "total";
 
 export type SearchSort = "stars" | "forks" | "updated";
 

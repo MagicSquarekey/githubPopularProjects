@@ -1,20 +1,20 @@
 import { NextResponse } from "next/server";
 import { fetchTrending } from "@/lib/github";
-import type { TrendingSince } from "@/lib/types";
+import type { TrendingSortKey } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
-  const sinceParam = searchParams.get("since") ?? "daily";
+  const sortParam = searchParams.get("sort") ?? "daily";
   const language = searchParams.get("language") ?? "All languages";
 
-  const allowed: TrendingSince[] = ["daily", "weekly", "monthly"];
-  const since = (allowed.includes(sinceParam as TrendingSince)
-    ? sinceParam
-    : "daily") as TrendingSince;
+  const allowed: TrendingSortKey[] = ["daily", "weekly", "monthly", "total"];
+  const sort = (allowed.includes(sortParam as TrendingSortKey)
+    ? sortParam
+    : "daily") as TrendingSortKey;
 
-  const result = await fetchTrending(since, language);
+  const result = await fetchTrending(sort, language);
   if (!result.ok) {
     const errorCode =
       result.status === 429

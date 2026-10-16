@@ -5,14 +5,19 @@ import { ProjectCard } from "@/components/ProjectCard";
 import { SkeletonGrid } from "@/components/Skeleton";
 import { useLocale } from "@/components/LocaleProvider";
 import { LANGUAGES } from "@/lib/languages";
-import type { Repository, SearchSort, TrendingSince } from "@/lib/types";
+import type {
+  Repository,
+  SearchSort,
+  TrendingSortKey,
+} from "@/lib/types";
 
 type Mode = "trending" | "search";
 
-const SINCE_OPTIONS: { value: TrendingSince; key: "sinceToday" | "sinceWeek" | "sinceMonth" }[] = [
-  { value: "daily", key: "sinceToday" },
-  { value: "weekly", key: "sinceWeek" },
-  { value: "monthly", key: "sinceMonth" },
+const TREND_DIMS: { value: TrendingSortKey; key: "trendDaily" | "trendWeekly" | "trendMonthly" | "trendTotal" }[] = [
+  { value: "daily", key: "trendDaily" },
+  { value: "weekly", key: "trendWeekly" },
+  { value: "monthly", key: "trendMonthly" },
+  { value: "total", key: "trendTotal" },
 ];
 
 const SORT_OPTIONS: { value: SearchSort; key: "sortStars" | "sortForks" | "sortUpdated" }[] = [
@@ -20,6 +25,8 @@ const SORT_OPTIONS: { value: SearchSort; key: "sortStars" | "sortForks" | "sortU
   { value: "forks", key: "sortForks" },
   { value: "updated", key: "sortUpdated" },
 ];
+
+const PAGE_SIZE = 12;
 
 const selectClass =
   "rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700 shadow-sm outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-200";
@@ -52,25 +59,29 @@ export function Explorer() {
   const [mode, setMode] = useState<Mode>("trending");
 
   // Trending state
-  const [since, setSince] = useState<TrendingSince>("daily");
+  const [dimension, setDimension] = useState<TrendingSortKey>("daily");
   const [trendingLang, setTrendingLang] = useState("All languages");
+  const [allItems, setAllItems] = useState<Repository[]>([]);
+  const [visible, setVisible] = useState(PAGE_SIZE);
 
   // Search state
   const [keyword, setKeyword] = useState("");
   const [searchLang, setSearchLang] = useState("All languages");
   const [sort, setSort] = useState<SearchSort>("stars");
   const [minStars, setMinStars] = useState("");
+  const [searchPage, setSearchPage] = useState(1);
 
   // Shared state
-  const [items, setItems] = useState<Repository[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [page, setPage] = useState(1);
   const [total, setTotal] = useState<number | null>(null);
+  const [searchItems, setSearchItems] = useState<Repository[]>([]);
 
   const abortRef = useRef<AbortController | null>(null);
 
-  const load = useCallback(async () => {
+  // Trending: fetch the unified list whenever dimension or language changes.
+  const loadTrending = useCallback(async () => {
     abortRef.current?.abort();
     const controller = new AbortController();
     abortRef.current = controller;
@@ -78,60 +89,99 @@ export function Explorer() {
     setLoading(true);
     setError(null);
     try {
-      let url: string;
-      if (mode === "trending") {
-        url = `/api/trending?since=${since}&language=${encodeURIComponent(trendingLang)}`;
-      } else {
+      const url = `/api/trending?sort=${dimension}&language=${encodeURIComponent(trendingLang)}`;
+      const res = await fetch(url, { signal: controller.signal });
+      const json = await res.json();
+      if (!res.ok) {
+        setError(localizeError(json));
+        setAllItems([]);
+        return;
+      }
+      setAllItems(json.items ?? []);
+      setVisible(PAGE_SIZE);
+    } catch (err) {
+      if ((err as Error).name === "AbortError") return;
+      setError((err as Error).message);
+      setAllItems([]);
+    } finally {
+      setLoading(false);
+    }
+  }, [dimension, trendingLang, localizeError]);
+
+  useEffect(() => {
+    if (mode === "trending") loadTrending();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mode, dimension, trendingLang]);
+
+  const loadSearch = useCallback(
+    async (page: number, append: boolean) => {
+      abortRef.current?.abort();
+      const controller = new AbortController();
+      abortRef.current = controller;
+      append ? setLoadingMore(true) : setLoading(true);
+      setError(null);
+      try {
         const params = new URLSearchParams();
         if (keyword.trim()) params.set("q", keyword.trim());
         params.set("language", searchLang);
         params.set("sort", sort);
         if (minStars) params.set("minStars", minStars);
         params.set("page", String(page));
-        url = `/api/search?${params.toString()}`;
+        const res = await fetch(`/api/search?${params.toString()}`, {
+          signal: controller.signal,
+        });
+        const json = await res.json();
+        if (!res.ok) {
+          setError(localizeError(json));
+          if (!append) setSearchItems([]);
+          return;
+        }
+        const items: Repository[] = json.items ?? [];
+        setTotal(json.total ?? null);
+        setSearchItems((prev) => (append ? [...prev, ...items] : items));
+      } catch (err) {
+        if ((err as Error).name === "AbortError") return;
+        setError((err as Error).message);
+        if (!append) setSearchItems([]);
+      } finally {
+        append ? setLoadingMore(false) : setLoading(false);
       }
-      const res = await fetch(url, { signal: controller.signal });
-      const json = await res.json();
-      if (!res.ok) {
-        setError(localizeError(json));
-        setItems([]);
-        return;
-      }
-      setItems(json.items ?? []);
-      setTotal(json.total ?? null);
-    } catch (err) {
-      if ((err as Error).name === "AbortError") return;
-      setError((err as Error).message);
-      setItems([]);
-    } finally {
-      setLoading(false);
-    }
-  }, [mode, since, trendingLang, keyword, searchLang, sort, minStars, page, localizeError]);
-
-  // Auto-load on filter change (trending) — immediate.
-  useEffect(() => {
-    if (mode === "trending") load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mode, since, trendingLang]);
+    },
+    [keyword, searchLang, sort, minStars, localizeError]
+  );
 
   const onSubmitSearch = (e: React.FormEvent) => {
     e.preventDefault();
-    setPage(1);
-    load();
+    setSearchPage(1);
+    loadSearch(1, false);
   };
 
   const switchMode = (next: Mode) => {
     setMode(next);
     setError(null);
-    if (next === "search" && items.length === 0) {
+    if (next === "search" && searchItems.length === 0) {
       setSearchLang(trendingLang === "All languages" ? "All languages" : trendingLang);
     }
   };
+
+  const trendingItems = allItems.slice(0, visible);
+  const trendingHasMore = visible < allItems.length;
+  const items = mode === "trending" ? trendingItems : searchItems;
+
+  const searchHasMore =
+    mode === "search" && searchItems.length > 0 && (total === null || searchItems.length < total);
 
   const tabClass = (active: boolean) =>
     `flex-1 rounded-md px-4 py-2 text-sm font-medium transition-colors ${
       active
         ? "bg-gray-900 text-white dark:bg-gray-100 dark:text-gray-900"
+        : "text-gray-600 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-800"
+    }`;
+
+  const dimClass = (active: boolean) =>
+    `rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
+      active
+        ? "bg-blue-600 text-white"
         : "text-gray-600 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-800"
     }`;
 
@@ -151,19 +201,15 @@ export function Explorer() {
 
       {mode === "trending" ? (
         <div className="mb-6 flex flex-wrap items-center gap-3">
-          <div className="flex items-center gap-1 rounded-lg border border-gray-200 bg-white p-1 dark:border-gray-800 dark:bg-gray-900">
-            {SINCE_OPTIONS.map((opt) => (
+          <div className="flex flex-wrap items-center gap-1 rounded-lg border border-gray-200 bg-white p-1 dark:border-gray-800 dark:bg-gray-900">
+            {TREND_DIMS.map((d) => (
               <button
-                key={opt.value}
+                key={d.value}
                 type="button"
-                onClick={() => setSince(opt.value)}
-                className={`rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
-                  since === opt.value
-                    ? "bg-blue-600 text-white"
-                    : "text-gray-600 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-800"
-                }`}
+                onClick={() => setDimension(d.value)}
+                className={dimClass(dimension === d.value)}
               >
-                {t(opt.key)}
+                {t(d.key)}
               </button>
             ))}
           </div>
@@ -233,13 +279,13 @@ export function Explorer() {
 
       {/* Results */}
       {loading ? (
-        <SkeletonGrid count={mode === "trending" ? 12 : 9} />
+        <SkeletonGrid count={12} />
       ) : error ? (
         <div className="rounded-xl border border-red-200 bg-red-50 p-6 text-center dark:border-red-900 dark:bg-red-950/40">
           <p className="text-sm font-medium text-red-700 dark:text-red-300">{error}</p>
           <button
             type="button"
-            onClick={load}
+            onClick={() => (mode === "trending" ? loadTrending() : loadSearch(1, false))}
             className="mt-3 rounded-lg border border-red-300 px-4 py-1.5 text-sm text-red-700 transition-colors hover:bg-red-100 dark:border-red-800 dark:text-red-300 dark:hover:bg-red-900/40"
           >
             {t("retry")}
@@ -251,41 +297,64 @@ export function Explorer() {
         </div>
       ) : (
         <>
-          <div className="mb-3 text-xs text-gray-500 dark:text-gray-400">
-            {mode === "search" && total !== null
-              ? t("resultCountSearch", { n: total.toLocaleString() })
-              : t("resultCountTrending", { n: items.length })}
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-2 text-xs text-gray-500 dark:text-gray-400">
+            <span>
+              {mode === "search" && total !== null
+                ? t("resultCountSearch", { n: total.toLocaleString() })
+                : t("resultCountTrending", { n: allItems.length })}
+            </span>
+            {mode === "trending" && <span>{t("trendingNote")}</span>}
           </div>
+
           <div className="grid animate-fade-in grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {items.map((repo, idx) => (
               <ProjectCard
                 key={`${repo.fullName}-${idx}`}
                 repo={repo}
-                rank={mode === "trending" ? idx + 1 : undefined}
+                rank={idx + 1}
+                trendingSort={mode === "trending" ? dimension : undefined}
               />
             ))}
           </div>
 
-          {mode === "search" && page > 1 && (
-            <div className="mt-6 flex justify-center">
+          {/* View more (trending) */}
+          {mode === "trending" && trendingHasMore && (
+            <div className="mt-6 flex flex-col items-center gap-2">
               <button
                 type="button"
-                onClick={() => setPage((p) => Math.max(1, p - 1))}
-                className="rounded-lg border border-gray-200 px-4 py-2 text-sm text-gray-600 transition-colors hover:bg-gray-50 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-gray-800"
+                onClick={() => setVisible((v) => v + PAGE_SIZE)}
+                className="rounded-lg border border-gray-200 bg-white px-6 py-2.5 text-sm font-medium text-gray-700 shadow-sm transition-colors hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-200 dark:hover:bg-gray-800"
               >
-                {t("prevPage")}
+                {t("viewMore")}
               </button>
             </div>
           )}
+          {mode === "trending" && !trendingHasMore && allItems.length > PAGE_SIZE && (
+            <div className="mt-6 text-center text-xs text-gray-400 dark:text-gray-500">
+              {t("noMoreHint")}
+            </div>
+          )}
+
+          {/* View more (search) */}
           {mode === "search" && (
-            <div className="mt-4 flex justify-center">
-              <button
-                type="button"
-                onClick={() => setPage((p) => p + 1)}
-                className="rounded-lg border border-gray-200 px-4 py-2 text-sm text-gray-600 transition-colors hover:bg-gray-50 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-gray-800"
-              >
-                {t("loadMore")}
-              </button>
+            <div className="mt-6 flex flex-col items-center gap-2">
+              {loadingMore ? (
+                <span className="text-sm text-gray-500 dark:text-gray-400">{t("loadingMore")}</span>
+              ) : searchHasMore ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    const next = searchPage + 1;
+                    setSearchPage(next);
+                    loadSearch(next, true);
+                  }}
+                  className="rounded-lg border border-gray-200 bg-white px-6 py-2.5 text-sm font-medium text-gray-700 shadow-sm transition-colors hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-200 dark:hover:bg-gray-800"
+                >
+                  {t("viewMore")}
+                </button>
+              ) : searchItems.length > 0 ? (
+                <span className="text-xs text-gray-400 dark:text-gray-500">{t("noMoreHint")}</span>
+              ) : null}
             </div>
           )}
         </>

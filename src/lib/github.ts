@@ -6,11 +6,14 @@ import type {
   Repository,
   SearchQuery,
   SearchSort,
-  TrendingSince,
+  TrendingSortKey,
 } from "./types";
 
 const GITHUB_API = "https://api.github.com";
 const GITHUB_TRENDING = "https://github.com/trending";
+
+/** The three time windows on GitHub's trending page. */
+type TrendingSince = "daily" | "weekly" | "monthly";
 
 function githubToken(): string | undefined {
   const token = process.env.GITHUB_TOKEN;
@@ -50,8 +53,7 @@ function mapSearchItem(item: Record<string, unknown>): Repository {
     createdAt: (item.created_at as string) ?? "",
     updatedAt: (item.updated_at as string) ?? "",
     pushedAt: (item.pushed_at as string) ?? "",
-    starsToday: null,
-    starsSince: null,
+    starsInPeriod: { daily: null, weekly: null, monthly: null },
   };
 }
 
@@ -60,13 +62,193 @@ function parseStars(value: string): number {
   return Number.isFinite(n) ? n : 0;
 }
 
+/** Parse a trending page for one time window into a list of repos. */
+function parseTrendingPage(
+  html: string,
+  since: TrendingSince
+): Repository[] {
+  const $ = cheerio.load(html);
+  const repos: Repository[] = [];
+  let idCounter = 0;
+
+  $("article.Box-row").each((_, el) => {
+    const article = $(el);
+    const anchor = article.find("h2 a").first();
+    const href = anchor.attr("href") ?? "";
+    const fullName = href.replace(/^\//, "").trim();
+    if (!fullName.includes("/")) return;
+    const [owner = "", name = ""] = fullName.split("/");
+
+    const description = article.find("p").first().text().trim() || null;
+    const language = article
+      .find('[itemprop="programmingLanguage"]')
+      .first()
+      .text()
+      .trim() || null;
+
+    const stars = parseStars(
+      article.find('a[href$="/stargazers"]').first().text().trim()
+    );
+    const forks = parseStars(
+      article.find('a[href$="/forks"]').first().text().trim()
+    );
+
+    // The right-hand badge: "X stars today / this week / this month".
+    const badgeText = article.find(".float-sm-right").first().text().trim();
+    const badgeMatch = badgeText.match(/([\d,]+)\s+stars/i);
+    const starsSince = badgeMatch ? parseStars(badgeMatch[1]) : null;
+
+    const topics: string[] = [];
+    article.find('a[href^="/topics/"]').each((_, t) => {
+      const topic = $(t).text().trim();
+      if (topic && !topics.includes(topic)) topics.push(topic);
+    });
+
+    repos.push({
+      id: --idCounter,
+      name,
+      fullName,
+      owner,
+      ownerAvatar: `https://github.com/${owner}.png?size=48`,
+      description,
+      url: `https://github.com/${fullName}`,
+      stars,
+      forks,
+      openIssues: 0,
+      watchers: 0,
+      language,
+      topics,
+      license: null,
+      createdAt: "",
+      updatedAt: "",
+      pushedAt: "",
+      starsInPeriod: { daily: null, weekly: null, monthly: null, [since]: starsSince },
+    });
+  });
+
+  return repos;
+}
+
+/** Merge by owner/name, taking the max of each numeric field. */
+function mergeRepos(lists: Repository[][]): Repository[] {
+  const byKey = new Map<string, Repository>();
+  for (const list of lists) {
+    for (const r of list) {
+      const key = r.fullName;
+      const existing = byKey.get(key);
+      if (!existing) {
+        byKey.set(key, { ...r, starsInPeriod: { ...r.starsInPeriod } });
+        continue;
+      }
+      existing.stars = Math.max(existing.stars, r.stars);
+      existing.forks = Math.max(existing.forks, r.forks);
+      existing.starsInPeriod.daily = maxNull(existing.starsInPeriod.daily, r.starsInPeriod.daily);
+      existing.starsInPeriod.weekly = maxNull(existing.starsInPeriod.weekly, r.starsInPeriod.weekly);
+      existing.starsInPeriod.monthly = maxNull(existing.starsInPeriod.monthly, r.starsInPeriod.monthly);
+      // Fill in richer metadata if the current copy is missing it.
+      if (!existing.description && r.description) existing.description = r.description;
+      if (!existing.language && r.language) existing.language = r.language;
+      if (existing.topics.length === 0 && r.topics.length) existing.topics = r.topics;
+    }
+  }
+  return [...byKey.values()];
+}
+
+function maxNull(a: number | null, b: number | null): number | null {
+  if (a == null) return b;
+  if (b == null) return a;
+  return Math.max(a, b);
+}
+
+async function fetchTrendingPage(
+  since: TrendingSince,
+  language: string
+): Promise<Repository[] | null> {
+  const langPath = language ? `/${encodeURIComponent(language)}` : "";
+  const url = `${GITHUB_TRENDING}${langPath}?since=${since}`;
+  const guard = checkOutboundUrl(url);
+  if (!guard.ok) return null;
+  try {
+    const res = await fetch(url, {
+      headers: {
+        "User-Agent":
+          "Mozilla/5.0 (compatible; githubPopularProjects/1.0; +https://github.com/MagicSquarekey/githubPopularProjects)",
+        Accept: "text/html",
+      },
+      signal: AbortSignal.timeout(15000),
+    });
+    if (!res.ok) return null;
+    const html = await res.text();
+    return parseTrendingPage(html, since);
+  } catch {
+    return null;
+  }
+}
+
 /**
- * Trending is approximated via the Search API when the official trending page
- * is unreachable. GitHub's own trending ranks by recent star velocity, which
- * the Search API cannot express directly, so we approximate with two signals:
- *   - "recently created + already popular" (freshest notable projects), and
- *   - "actively pushed + established" (active popular projects).
- * Combined and de-duplicated, ordered by stars.
+ * Fetch trending from all three windows (daily/weekly/monthly), merge, and
+ * return the unified list. The list is then sorted by the caller per metric.
+ * Falls back to a Search-API approximation only if the official page is
+ * unreachable for every window.
+ */
+async function fetchUnifiedTrending(
+  language: string
+): Promise<Repository[]> {
+  const cacheKey = `trending:unified:${language}`;
+  const cached = cacheGet<Repository[]>(cacheKey);
+  if (cached) return cached;
+
+  const [daily, weekly, monthly] = await Promise.all([
+    fetchTrendingPage("daily", language),
+    fetchTrendingPage("weekly", language),
+    fetchTrendingPage("monthly", language),
+  ]);
+
+  // If nothing came back, approximate via the Search API.
+  if (!daily && !weekly && !monthly) {
+    const approx = await fetchTrendingViaSearch("daily", language || undefined);
+    cacheSet(cacheKey, approx, 30 * 60 * 1000);
+    return approx;
+  }
+
+  const merged = mergeRepos([daily ?? [], weekly ?? [], monthly ?? []]);
+  cacheSet(cacheKey, merged, 30 * 60 * 1000);
+  return merged;
+}
+
+/** Return trending repositories sorted by the requested metric.
+ *   daily/weekly/monthly -> rank by stars gained in that window
+ *   total               -> rank by total stars
+ */
+export async function fetchTrending(
+  sort: TrendingSortKey,
+  language?: string
+): Promise<ApiResult<{ items: Repository[] }>> {
+  const lang = language && language !== "All languages" ? language : "";
+  const items = await fetchUnifiedTrending(lang);
+  if (items.length === 0) {
+    return {
+      ok: false,
+      error: "Failed to load trending",
+      status: 502,
+    };
+  }
+  const sorted =
+    sort === "total"
+      ? [...items].sort((a, b) => b.stars - a.stars)
+      : [...items].sort((a, b) => {
+          const av = a.starsInPeriod[sort] ?? -1;
+          const bv = b.starsInPeriod[sort] ?? -1;
+          if (bv !== av) return bv - av;
+          return b.stars - a.stars;
+        });
+  return { ok: true, data: { items: sorted } };
+}
+
+/**
+ * Approximate trending via the Search API when the official page is
+ * unreachable. Combines recently-created notable projects with actively
+ * maintained established ones, de-duplicated and sorted by stars.
  */
 async function fetchTrendingViaSearch(
   since: TrendingSince,
@@ -76,13 +258,10 @@ async function fetchTrendingViaSearch(
   const sinceDate = new Date(Date.now() - days * 86400000)
     .toISOString()
     .slice(0, 10);
-  const langQ =
-    language && language !== "All languages" ? `language:${language} ` : "";
+  const langQ = language ? `language:${language} ` : "";
 
   const queries = [
-    // Notable projects created recently.
     `${langQ}created:>${sinceDate} stars:>50`,
-    // Established, actively-maintained projects.
     `${langQ}pushed:>${sinceDate} stars:>500`,
   ];
 
@@ -94,11 +273,14 @@ async function fetchTrendingViaSearch(
       const res = await fetch(url, { headers: apiHeaders() });
       if (!res.ok) throw new Error(`GitHub API error ${res.status}`);
       const json = (await res.json()) as { items?: Record<string, unknown>[] };
-      return (json.items ?? []).map(mapSearchItem);
+      return (json.items ?? []).map((item) => {
+        const r = mapSearchItem(item);
+        r.starsInPeriod = { daily: null, weekly: null, monthly: null };
+        return r;
+      });
     })
   );
 
-  // De-duplicate by full name, keep first occurrence, order by stars desc.
   const seen = new Set<string>();
   const merged: Repository[] = [];
   for (const list of results) {
@@ -110,69 +292,6 @@ async function fetchTrendingViaSearch(
   }
   merged.sort((a, b) => b.stars - a.stars);
   return merged.slice(0, 30);
-}
-
-/**
- * Fetch trending repositories.
- *
- * Primary source is the official github.com/trending page (parsed with cheerio),
- * which is what "trending" actually means and carries the "stars today/this
- * week/this month" badge. When that page is unreachable — restricted networks,
- * firewalls, or github.com blocked while api.github.com is reachable — we fall
- * back to approximating trending via the GitHub Search API.
- */
-export async function fetchTrending(
-  since: TrendingSince,
-  language?: string
-): Promise<ApiResult<{ items: Repository[] }>> {
-  const lang = language && language !== "All languages" ? language : "";
-  const pageUrl = `${GITHUB_TRENDING}${lang ? `/${encodeURIComponent(lang)}` : ""}?since=${since}`;
-
-  const cacheKey = `trending:${pageUrl}`;
-  const cached = cacheGet<{ items: Repository[] }>(cacheKey);
-  if (cached) return { ok: true, data: cached };
-
-  const guard = checkOutboundUrl(pageUrl);
-  if (!guard.ok) {
-    return { ok: false, error: guard.reason, status: 400 };
-  }
-
-  // 1) Try the official trending page.
-  try {
-    const res = await fetch(pageUrl, {
-      headers: {
-        "User-Agent":
-          "Mozilla/5.0 (compatible; githubPopularProjects/1.0; +https://github.com/MagicSquarekey/githubPopularProjects)",
-        Accept: "text/html",
-      },
-      signal: AbortSignal.timeout(12000),
-    });
-    if (res.ok) {
-      const html = await res.text();
-      const items = parseTrendingHtml(html, since);
-      if (items.length > 0) {
-        const data = { items };
-        cacheSet(cacheKey, data, 30 * 60 * 1000);
-        return { ok: true, data };
-      }
-    }
-  } catch {
-    // fall through to Search API approximation
-  }
-
-  // 2) Fall back to Search API approximation.
-  try {
-    const items = await fetchTrendingViaSearch(since, lang || undefined);
-    const data = { items };
-    cacheSet(cacheKey, data, 30 * 60 * 1000);
-    return { ok: true, data };
-  } catch (err) {
-    return {
-      ok: false,
-      error: `Failed to load trending: ${(err as Error).message}`,
-      status: 502,
-    };
-  }
 }
 
 /**
@@ -236,80 +355,4 @@ export async function searchRepositories(
       status: 502,
     };
   }
-}
-
-/** Split "owner / repo" and keep the owner login. */
-function splitFullName(fullName: string): { owner: string; name: string } {
-  const [owner = "", name = ""] = fullName.split("/");
-  return { owner, name };
-}
-
-function parseTrendingHtml(html: string, since: TrendingSince): Repository[] {
-  const $ = cheerio.load(html);
-  const repos: Repository[] = [];
-  let idCounter = 0;
-
-  $("article.Box-row").each((_, el) => {
-    const article = $(el);
-    const anchor = article.find("h2 a").first();
-    const href = anchor.attr("href") ?? "";
-    const fullName = href.replace(/^\//, "").trim();
-    if (!fullName.includes("/")) return;
-    const { owner, name } = splitFullName(fullName);
-
-    const description = article.find("p").first().text().trim() || null;
-    const langEl = article.find('[itemprop="programmingLanguage"]').first();
-    const language = langEl.text().trim() || null;
-
-    const starText = article
-      .find('a[href$="/stargazers"]')
-      .first()
-      .text()
-      .trim();
-    const stars = parseStars(starText);
-
-    const forkText = article
-      .find('a[href$="/forks"]')
-      .first()
-      .text()
-      .trim();
-    const forks = parseStars(forkText);
-
-    // "X stars today" / "this week" / "this month" badge.
-    const badgeText = article.find(".float-sm-right").first().text().trim();
-    const badgeMatch = badgeText.match(/([\d,]+)\s+stars/i);
-    const starsSince = badgeMatch ? parseStars(badgeMatch[1]) : null;
-
-    const topics: string[] = [];
-    article.find('a[href^="/topics/"]').each((_, t) => {
-      const topic = $(t).text().trim();
-      if (topic && !topics.includes(topic)) topics.push(topic);
-    });
-
-    const avatar = `https://github.com/${owner}.png?size=48`;
-
-    repos.push({
-      id: --idCounter,
-      name,
-      fullName,
-      owner,
-      ownerAvatar: avatar,
-      description,
-      url: `https://github.com/${fullName}`,
-      stars,
-      forks,
-      openIssues: 0,
-      watchers: 0,
-      language,
-      topics,
-      license: null,
-      createdAt: "",
-      updatedAt: "",
-      pushedAt: "",
-      starsToday: since === "daily" ? starsSince : null,
-      starsSince,
-    });
-  });
-
-  return repos;
 }
