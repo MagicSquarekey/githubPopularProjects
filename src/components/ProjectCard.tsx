@@ -5,7 +5,7 @@ function rankBadgeValue(
   repo: Repository,
   sort: TrendingSortKey
 ): number | null {
-  if (sort === "total" || sort === "top") return null;
+  if (sort === "top") return null;
   return repo.starsInPeriod[sort];
 }
 
@@ -52,7 +52,7 @@ export function ProjectCard({
   trendingSort?: TrendingSortKey;
 }) {
   const periodGain =
-    trendingSort && trendingSort !== "total"
+    trendingSort && trendingSort !== "top"
       ? rankBadgeValue(repo, trendingSort)
       : null;
   return (

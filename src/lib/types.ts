@@ -26,7 +26,7 @@ export type Repository = {
   starsInPeriod: StarPeriod;
 };
 
-export type TrendingSortKey = "daily" | "weekly" | "monthly" | "total" | "top";
+export type TrendingSortKey = "daily" | "weekly" | "monthly" | "top";
 
 export type SearchSort = "stars" | "forks" | "updated";
 

@@ -13,11 +13,10 @@ import type {
 
 type Mode = "trending" | "search";
 
-const TREND_DIMS: { value: TrendingSortKey; key: "trendDaily" | "trendWeekly" | "trendMonthly" | "trendTotal" | "trendTop" }[] = [
+const TREND_DIMS: { value: TrendingSortKey; key: "trendDaily" | "trendWeekly" | "trendMonthly" | "trendTop" }[] = [
   { value: "daily", key: "trendDaily" },
   { value: "weekly", key: "trendWeekly" },
   { value: "monthly", key: "trendMonthly" },
-  { value: "total", key: "trendTotal" },
   { value: "top", key: "trendTop" },
 ];
 

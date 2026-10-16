@@ -10,7 +10,7 @@ export async function GET(request: Request) {
   const language = searchParams.get("language") ?? "All languages";
   const page = Number(searchParams.get("page") ?? 1) || 1;
 
-  const allowed: TrendingSortKey[] = ["daily", "weekly", "monthly", "total", "top"];
+  const allowed: TrendingSortKey[] = ["daily", "weekly", "monthly", "top"];
   const sort = (allowed.includes(sortParam as TrendingSortKey)
     ? sortParam
     : "daily") as TrendingSortKey;

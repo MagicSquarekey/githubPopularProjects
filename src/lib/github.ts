@@ -296,15 +296,12 @@ export async function fetchTrending(
       status: 502,
     };
   }
-  const sorted =
-    sort === "total"
-      ? [...items].sort((a, b) => b.stars - a.stars)
-      : [...items].sort((a, b) => {
-          const av = a.starsInPeriod[sort] ?? -1;
-          const bv = b.starsInPeriod[sort] ?? -1;
-          if (bv !== av) return bv - av;
-          return b.stars - a.stars;
-        });
+  const sorted = [...items].sort((a, b) => {
+    const av = a.starsInPeriod[sort] ?? -1;
+    const bv = b.starsInPeriod[sort] ?? -1;
+    if (bv !== av) return bv - av;
+    return b.stars - a.stars;
+  });
   return { ok: true, data: { items: sorted } };
 }
 
