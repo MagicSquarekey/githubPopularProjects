@@ -5,7 +5,7 @@ function rankBadgeValue(
   repo: Repository,
   sort: TrendingSortKey
 ): number | null {
-  if (sort === "total") return null;
+  if (sort === "total" || sort === "top") return null;
   return repo.starsInPeriod[sort];
 }
 

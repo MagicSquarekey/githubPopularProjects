@@ -216,14 +216,77 @@ async function fetchUnifiedTrending(
   return merged;
 }
 
+/** Per-page size for the "top stars" Search-API ranking. */
+const TOP_PAGE_SIZE = 30;
+
+/**
+ * "High-star total ranking" via the GitHub Search API. Covers the whole of
+ * GitHub (not just the trending page), so mature high-star repos like n8n
+ * show up. Ordered by total stars, supports language filter and paging.
+ */
+export async function fetchTopStars(
+  language: string,
+  page: number
+): Promise<ApiResult<{ items: Repository[]; total: number }>> {
+  const langQ = language ? `language:${language} ` : "";
+  const q = `${langQ}stars:>1`;
+  const safePage = Math.max(1, Math.floor(page));
+  const url = `${GITHUB_API}/search/repositories?q=${encodeURIComponent(
+    q
+  )}&sort=stars&order=desc&page=${safePage}&per_page=${TOP_PAGE_SIZE}`;
+
+  const cacheKey = `top:${url}`;
+  const cached = cacheGet<{ items: Repository[]; total: number }>(cacheKey);
+  if (cached) return { ok: true, data: cached };
+
+  const guard = checkOutboundUrl(url);
+  if (!guard.ok) return { ok: false, error: guard.reason, status: 400 };
+
+  try {
+    const res = await fetch(url, { headers: apiHeaders() });
+    if (res.status === 403 || res.status === 429) {
+      return {
+        ok: false,
+        error:
+          "GitHub rate limit reached. Add a GITHUB_TOKEN env var to raise it.",
+        status: 429,
+      };
+    }
+    if (!res.ok) {
+      return { ok: false, error: `GitHub API error ${res.status}`, status: res.status };
+    }
+    const json = (await res.json()) as {
+      items?: Record<string, unknown>[];
+      total_count?: number;
+    };
+    const items = (json.items ?? []).map(mapSearchItem);
+    const data = { items, total: json.total_count ?? items.length };
+    cacheSet(cacheKey, data, 30 * 60 * 1000);
+    return { ok: true, data };
+  } catch (err) {
+    return {
+      ok: false,
+      error: `Failed to reach GitHub: ${(err as Error).message}`,
+      status: 502,
+    };
+  }
+}
+
 /** Return trending repositories sorted by the requested metric.
  *   daily/weekly/monthly -> rank by stars gained in that window
- *   total               -> rank by total stars
+ *   total               -> rank by total stars (within trending scope)
+ *   top                 -> high-star total ranking across all of GitHub
  */
 export async function fetchTrending(
   sort: TrendingSortKey,
-  language?: string
-): Promise<ApiResult<{ items: Repository[] }>> {
+  language?: string,
+  page = 1
+): Promise<ApiResult<{ items: Repository[]; total?: number }>> {
+  if (sort === "top") {
+    const lang = language && language !== "All languages" ? language : "";
+    return fetchTopStars(lang, page);
+  }
+
   const lang = language && language !== "All languages" ? language : "";
   const items = await fetchUnifiedTrending(lang);
   if (items.length === 0) {

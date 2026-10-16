@@ -23,6 +23,7 @@ export const messages = {
   trendWeekly: ["本周新增 Star", "Stars this week"],
   trendMonthly: ["本月新增 Star", "Stars this month"],
   trendTotal: ["总 Star", "Total stars"],
+  trendTop: ["高星总榜", "All-time top"],
   dimensionLabel: ["榜单维度", "Ranking"],
 
   // Pagination / hint
@@ -35,6 +36,10 @@ export const messages = {
   trendingNote: [
     "榜单基于 GitHub 官方 Trending 页面。",
     "Rankings are based on GitHub's official Trending page.",
+  ],
+  trendingNoteTop: [
+    "高星总榜基于 GitHub 全站仓库，按总 Star 排序。",
+    "All-time top ranks every GitHub repository by total stars.",
   ],
 
   // Trending filters

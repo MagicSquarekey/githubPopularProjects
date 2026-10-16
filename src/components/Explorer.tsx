@@ -13,11 +13,12 @@ import type {
 
 type Mode = "trending" | "search";
 
-const TREND_DIMS: { value: TrendingSortKey; key: "trendDaily" | "trendWeekly" | "trendMonthly" | "trendTotal" }[] = [
+const TREND_DIMS: { value: TrendingSortKey; key: "trendDaily" | "trendWeekly" | "trendMonthly" | "trendTotal" | "trendTop" }[] = [
   { value: "daily", key: "trendDaily" },
   { value: "weekly", key: "trendWeekly" },
   { value: "monthly", key: "trendMonthly" },
   { value: "total", key: "trendTotal" },
+  { value: "top", key: "trendTop" },
 ];
 
 const SORT_OPTIONS: { value: SearchSort; key: "sortStars" | "sortForks" | "sortUpdated" }[] = [
@@ -63,6 +64,7 @@ export function Explorer() {
   const [trendingLang, setTrendingLang] = useState("All languages");
   const [allItems, setAllItems] = useState<Repository[]>([]);
   const [visible, setVisible] = useState(PAGE_SIZE);
+  const [trendingTotal, setTrendingTotal] = useState<number | null>(null);
 
   // Search state
   const [keyword, setKeyword] = useState("");
@@ -81,35 +83,42 @@ export function Explorer() {
   const abortRef = useRef<AbortController | null>(null);
 
   // Trending: fetch the unified list whenever dimension or language changes.
-  const loadTrending = useCallback(async () => {
-    abortRef.current?.abort();
-    const controller = new AbortController();
-    abortRef.current = controller;
+  const loadTrending = useCallback(
+    async (page = 1, append = false) => {
+      abortRef.current?.abort();
+      const controller = new AbortController();
+      abortRef.current = controller;
 
-    setLoading(true);
-    setError(null);
-    try {
-      const url = `/api/trending?sort=${dimension}&language=${encodeURIComponent(trendingLang)}`;
-      const res = await fetch(url, { signal: controller.signal });
-      const json = await res.json();
-      if (!res.ok) {
-        setError(localizeError(json));
-        setAllItems([]);
-        return;
+      append ? setLoadingMore(true) : setLoading(true);
+      setError(null);
+      try {
+        const url = `/api/trending?sort=${dimension}&language=${encodeURIComponent(
+          trendingLang
+        )}${dimension === "top" ? `&page=${page}` : ""}`;
+        const res = await fetch(url, { signal: controller.signal });
+        const json = await res.json();
+        if (!res.ok) {
+          setError(localizeError(json));
+          if (!append) setAllItems([]);
+          return;
+        }
+        const items: Repository[] = json.items ?? [];
+        setTrendingTotal(json.total ?? null);
+        setAllItems((prev) => (append ? [...prev, ...items] : items));
+        setVisible(PAGE_SIZE);
+      } catch (err) {
+        if ((err as Error).name === "AbortError") return;
+        setError((err as Error).message);
+        if (!append) setAllItems([]);
+      } finally {
+        append ? setLoadingMore(false) : setLoading(false);
       }
-      setAllItems(json.items ?? []);
-      setVisible(PAGE_SIZE);
-    } catch (err) {
-      if ((err as Error).name === "AbortError") return;
-      setError((err as Error).message);
-      setAllItems([]);
-    } finally {
-      setLoading(false);
-    }
-  }, [dimension, trendingLang, localizeError]);
+    },
+    [dimension, trendingLang, localizeError]
+  );
 
   useEffect(() => {
-    if (mode === "trending") loadTrending();
+    if (mode === "trending") loadTrending(1, false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mode, dimension, trendingLang]);
 
@@ -164,8 +173,14 @@ export function Explorer() {
     }
   };
 
-  const trendingItems = allItems.slice(0, visible);
-  const trendingHasMore = visible < allItems.length;
+  // For the official trending dimensions, allItems is the full merged list
+  // and we page it client-side. For "top" (高星总榜), the API pages itself,
+  // so allItems already holds exactly what's been fetched.
+  const isTop = dimension === "top";
+  const trendingItems = isTop ? allItems : allItems.slice(0, visible);
+  const trendingHasMore = isTop
+    ? trendingTotal !== null && allItems.length < trendingTotal
+    : visible < allItems.length;
   const items = mode === "trending" ? trendingItems : searchItems;
 
   const searchHasMore =
@@ -303,7 +318,9 @@ export function Explorer() {
                 ? t("resultCountSearch", { n: total.toLocaleString() })
                 : t("resultCountTrending", { n: allItems.length })}
             </span>
-            {mode === "trending" && <span>{t("trendingNote")}</span>}
+            {mode === "trending" && (
+              <span>{isTop ? t("trendingNoteTop") : t("trendingNote")}</span>
+            )}
           </div>
 
           <div className="grid animate-fade-in grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -317,19 +334,28 @@ export function Explorer() {
             ))}
           </div>
 
-          {/* View more (trending) */}
+          {/* View more (trending). "top" pages the API; the official
+              dimensions reveal more of the already-fetched list. */}
           {mode === "trending" && trendingHasMore && (
             <div className="mt-6 flex flex-col items-center gap-2">
-              <button
-                type="button"
-                onClick={() => setVisible((v) => v + PAGE_SIZE)}
-                className="rounded-lg border border-gray-200 bg-white px-6 py-2.5 text-sm font-medium text-gray-700 shadow-sm transition-colors hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-200 dark:hover:bg-gray-800"
-              >
-                {t("viewMore")}
-              </button>
+              {loadingMore ? (
+                <span className="text-sm text-gray-500 dark:text-gray-400">{t("loadingMore")}</span>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() =>
+                    isTop
+                      ? loadTrending(Math.floor(allItems.length / 30) + 1, true)
+                      : setVisible((v) => v + PAGE_SIZE)
+                  }
+                  className="rounded-lg border border-gray-200 bg-white px-6 py-2.5 text-sm font-medium text-gray-700 shadow-sm transition-colors hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-200 dark:hover:bg-gray-800"
+                >
+                  {t("viewMore")}
+                </button>
+              )}
             </div>
           )}
-          {mode === "trending" && !trendingHasMore && allItems.length > PAGE_SIZE && (
+          {mode === "trending" && !trendingHasMore && !isTop && allItems.length > PAGE_SIZE && (
             <div className="mt-6 text-center text-xs text-gray-400 dark:text-gray-500">
               {t("noMoreHint")}
             </div>

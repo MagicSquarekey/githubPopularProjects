@@ -8,13 +8,14 @@ export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const sortParam = searchParams.get("sort") ?? "daily";
   const language = searchParams.get("language") ?? "All languages";
+  const page = Number(searchParams.get("page") ?? 1) || 1;
 
-  const allowed: TrendingSortKey[] = ["daily", "weekly", "monthly", "total"];
+  const allowed: TrendingSortKey[] = ["daily", "weekly", "monthly", "total", "top"];
   const sort = (allowed.includes(sortParam as TrendingSortKey)
     ? sortParam
     : "daily") as TrendingSortKey;
 
-  const result = await fetchTrending(sort, language);
+  const result = await fetchTrending(sort, language, Math.min(Math.max(page, 1), 100));
   if (!result.ok) {
     const errorCode =
       result.status === 429
@@ -28,7 +29,7 @@ export async function GET(request: Request) {
     );
   }
   return NextResponse.json(
-    { items: result.data.items },
+    { items: result.data.items, total: result.data.total },
     { headers: { "Cache-Control": "public, max-age=300" } }
   );
 }
