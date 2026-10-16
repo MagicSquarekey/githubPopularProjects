@@ -1,6 +1,6 @@
 {
   "name": "github-popular-projects",
-  "version": "1.0.0",
+  "version": "0.0.1",
   "private": true,
   "description": "An open-source site to discover trending GitHub projects — browse trending lists and search by language, stars, and keywords.",
   "license": "MIT",
