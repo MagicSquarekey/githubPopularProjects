@@ -89,6 +89,7 @@ docker run -p 3000:3000 -e GITHUB_TOKEN=ghp_可选token github-popular-projects
 | -------------- | -------- | ------------------------------------------ |
 | `GITHUB_TOKEN` | 否       | 个人访问令牌，用于提升 GitHub API 频率上限 |
 | `PORT`         | 否       | 生产服务器端口（默认 `3000`）              |
+| `HTTPS_PROXY`  | 否       | 服务端出站代理。github.com 需代理才能访问的网络环境（如国内本地运行）时设置为 `http://127.0.0.1:7890` 一类的本地代理地址；海外服务器留空即直连 |
 
 不设置 `GITHUB_TOKEN` 也能正常使用；此时 GitHub 匿名搜索限制为每分钟 10 次，已由内置缓存缓解。
 
