@@ -302,7 +302,14 @@ export async function fetchTrending(
     if (bv !== av) return bv - av;
     return b.stars - a.stars;
   });
-  return { ok: true, data: { items: sorted } };
+
+  // A repo only carries the increment for the window whose page it appeared
+  // on, so keep only repos that have real data for the requested window.
+  // Every card in the list then shows its matching "stars gained" badge.
+  // (Fall back to the merged list if the filter would empty it — e.g. that
+  // window's page failed while another succeeded.)
+  const filtered = sorted.filter((r) => (r.starsInPeriod[sort] ?? 0) > 0);
+  return { ok: true, data: { items: filtered.length > 0 ? filtered : sorted } };
 }
 
 /**
