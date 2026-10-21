@@ -17,6 +17,37 @@ export const messages = {
   // Mode tabs
   modeTrending: ["热门榜单", "Trending"],
   modeSearch: ["搜索", "Search"],
+  modeFind: ["找项目", "Find projects"],
+
+  // Find mode
+  findPlaceholder: [
+    "描述你要的功能，例如：自动生成图片、拖拽排序表格、图片压缩",
+    "Describe what you need, e.g. image generation, sortable table, image compression",
+  ],
+  findSubmit: ["查找", "Find"],
+  findType: ["类型", "Type"],
+  findTypeAll: ["全部类型", "All types"],
+  kindLibrary: ["库 / 组件", "Library"],
+  kindApplication: ["完整应用", "App"],
+  kindCli: ["CLI 工具", "CLI"],
+  kindPlugin: ["插件", "Plugin"],
+  kindTemplate: ["模板", "Template"],
+  kindFramework: ["框架", "Framework"],
+  kindUnknown: ["项目", "Project"],
+  findMatched: ["匹配关键词", "Matched terms"],
+  findEmpty: [
+    "没有找到相关项目，换个说法或放宽筛选条件试试。",
+    "No matching projects. Try different wording or loosen the filters.",
+  ],
+  findHint: [
+    "用中文描述需求即可，会自动翻译成英文检索。",
+    "Describe your need in Chinese or English; it is translated into English queries automatically.",
+  ],
+  maintenanceActive: ["活跃", "Active"],
+  maintenanceModerate: ["一般", "Moderate"],
+  maintenanceStale: ["停滞", "Stale"],
+  deploySelfHosted: ["自托管 / Docker", "Self-hosted / Docker"],
+  installLabel: ["安装", "Install"],
 
   // Trending dimension tabs
   trendDaily: ["今日新增 Star", "Stars today"],

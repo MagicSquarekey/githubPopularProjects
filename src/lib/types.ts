@@ -4,6 +4,18 @@ export type StarPeriod = {
   monthly: number | null;
 };
 
+/** Inferred project shape, used by the functional search. */
+export type RepoKind =
+  | "library"
+  | "application"
+  | "cli"
+  | "plugin"
+  | "template"
+  | "framework"
+  | "unknown";
+
+export type Maintenance = "active" | "moderate" | "stale";
+
 export type Repository = {
   id: number;
   name: string;
@@ -22,8 +34,15 @@ export type Repository = {
   createdAt: string;
   updatedAt: string;
   pushedAt: string;
+  archived?: boolean;
   // Stars gained in each trending window (null when not present in that window).
   starsInPeriod: StarPeriod;
+  // Functional-search enrichment (absent for trending results).
+  kind?: RepoKind;
+  installCommand?: string | null;
+  deployHint?: string | null;
+  maintenance?: Maintenance;
+  relevanceScore?: number;
 };
 
 export type TrendingSortKey = "daily" | "weekly" | "monthly" | "top";

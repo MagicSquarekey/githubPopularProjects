@@ -1,5 +1,26 @@
+"use client";
+
 import { languageColor, formatCount } from "@/lib/languages";
-import type { Repository, TrendingSortKey } from "@/lib/types";
+import { useLocale } from "./LocaleProvider";
+import type { MessageKey } from "@/lib/i18n";
+import type { RepoKind, Repository, TrendingSortKey } from "@/lib/types";
+
+const KIND_KEYS: Record<RepoKind, MessageKey> = {
+  library: "kindLibrary",
+  application: "kindApplication",
+  cli: "kindCli",
+  plugin: "kindPlugin",
+  template: "kindTemplate",
+  framework: "kindFramework",
+  unknown: "kindUnknown",
+};
+
+function kindLabel(
+  kind: RepoKind,
+  t: (key: MessageKey) => string
+): string {
+  return t(KIND_KEYS[kind]);
+}
 
 function rankBadgeValue(
   repo: Repository,
@@ -51,6 +72,7 @@ export function ProjectCard({
   rank?: number;
   trendingSort?: TrendingSortKey;
 }) {
+  const { t } = useLocale();
   const periodGain =
     trendingSort && trendingSort !== "top"
       ? rankBadgeValue(repo, trendingSort)
@@ -82,6 +104,11 @@ export function ProjectCard({
           <span className="text-gray-500 dark:text-gray-400">{repo.owner} / </span>
           {repo.name}
         </a>
+        {repo.kind && (
+          <span className="shrink-0 rounded-md border border-gray-200 px-1.5 py-0.5 text-[10px] font-medium text-gray-600 dark:border-gray-700 dark:text-gray-300">
+            {kindLabel(repo.kind, t)}
+          </span>
+        )}
       </div>
 
       {repo.description && (
@@ -139,7 +166,47 @@ export function ProjectCard({
             {repo.license}
           </span>
         )}
+        {repo.maintenance && (
+          <span
+            className="flex items-center gap-1"
+            title={
+              repo.maintenance === "active"
+                ? t("maintenanceActive")
+                : repo.maintenance === "moderate"
+                  ? t("maintenanceModerate")
+                  : t("maintenanceStale")
+            }
+          >
+            <span
+              className={`inline-block h-2 w-2 rounded-full ${
+                repo.maintenance === "active"
+                  ? "bg-green-500"
+                  : repo.maintenance === "moderate"
+                    ? "bg-yellow-500"
+                    : "bg-gray-400"
+              }`}
+            />
+            {repo.maintenance === "active"
+              ? t("maintenanceActive")
+              : repo.maintenance === "moderate"
+                ? t("maintenanceModerate")
+                : t("maintenanceStale")}
+          </span>
+        )}
       </div>
+
+      {repo.installCommand && (
+        <div className="mt-3 flex items-center gap-2 rounded-lg bg-gray-50 px-2.5 py-1.5 font-mono text-xs text-gray-700 dark:bg-gray-800/60 dark:text-gray-300">
+          <span className="text-gray-400 dark:text-gray-500">$</span>
+          <code className="truncate">{repo.installCommand}</code>
+        </div>
+      )}
+      {repo.deployHint === "self-hosted" && (
+        <div className="mt-3 flex items-center gap-1.5 rounded-lg bg-emerald-50 px-2.5 py-1.5 text-xs text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300">
+          <span className="inline-block h-1.5 w-1.5 rounded-full bg-emerald-500" />
+          {t("deploySelfHosted")}
+        </div>
+      )}
     </div>
   );
 }

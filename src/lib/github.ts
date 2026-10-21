@@ -20,7 +20,7 @@ function githubToken(): string | undefined {
   return token && token.length > 0 ? token : undefined;
 }
 
-function apiHeaders(): Record<string, string> {
+export function apiHeaders(): Record<string, string> {
   const headers: Record<string, string> = {
     Accept: "application/vnd.github+json",
     "X-GitHub-Api-Version": "2022-11-28",
@@ -32,7 +32,7 @@ function apiHeaders(): Record<string, string> {
 }
 
 /** Map a raw GitHub search API item to our Repository shape. */
-function mapSearchItem(item: Record<string, unknown>): Repository {
+export function mapSearchItem(item: Record<string, unknown>): Repository {
   const owner = (item.owner ?? {}) as Record<string, unknown>;
   const license = (item.license ?? null) as { spdx_id?: string } | null;
   return {
@@ -53,6 +53,7 @@ function mapSearchItem(item: Record<string, unknown>): Repository {
     createdAt: (item.created_at as string) ?? "",
     updatedAt: (item.updated_at as string) ?? "",
     pushedAt: (item.pushed_at as string) ?? "",
+    archived: (item.archived as boolean) ?? false,
     starsInPeriod: { daily: null, weekly: null, monthly: null },
   };
 }

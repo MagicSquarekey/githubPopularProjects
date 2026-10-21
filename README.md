@@ -10,13 +10,38 @@
 
 ## ✨ 功能特性
 
-- **热门榜单** — 今日 / 本周 / 本月，支持 20+ 种语言筛选
+- **热门榜单** — 今日 / 本周 / 本月新增 Star，官方 Trending 口径，支持 20+ 种语言筛选
+- **高星总榜** — 覆盖全站仓库按总 Star 排序
+- **按功能找项目** — 用中文描述需求（如「自动生成图片」「拖拽排序表格」），自动转英文检索，返回库 / 完整应用 / CLI 等各类项目
 - **搜索** — 关键词、语言、排序（综合推荐 / Fork 最多 / 最近更新）、最低 Star 数
-- **丰富的项目卡片** — 作者、描述、Star、Fork、主语言、话题标签、开源协议、"今日新增 Star"徽标
+- **丰富的项目卡片** — 作者、描述、Star、Fork、主语言、话题标签、开源协议、新增 Star 徽标、项目类型、安装命令、维护状态
 - **深色 / 浅色主题**，跟随系统偏好自动切换
 - **中文 / English 界面**，默认中文，右上角可切换，选择会保存在浏览器
 - **服务端缓存**，有效控制在 GitHub 频率限制内
 - **可选 Token 支持**，提升 GitHub API 频率上限
+
+---
+
+## 🔎 按功能找项目
+
+在「找项目」标签页输入一句中文需求即可：
+
+| 输入 | 自动扩展为 | 结果示例 |
+|------|-----------|---------|
+| 自动生成图片 | image generation / text to image / stable diffusion | Stable Diffusion WebUI（完整应用）、diffusers（库） |
+| 拖拽排序表格 | table drag drop / table / drag drop | Vue.Draggable、handsontable、dnd-kit |
+| 图片压缩 | image compression / image optimizer | browser-image-compression、caesium |
+
+处理流程：
+
+1. **中英功能词典**：中文需求 → 多个英文检索词（GitHub 数据以英文为主，直接搜中文几乎无结果）
+2. **多查询并行合并**：一次检索 2~3 个查询，按仓库去重
+3. **质量过滤**：自动排除 awesome 清单、教程、课程、已归档仓库
+4. **相关性 + 高星排序**：关键词命中权重优先，叠加 Star 数、活跃度、许可证
+5. **类型识别**：根据 topics / 描述推断「库 / 完整应用 / CLI / 插件 / 模板 / 框架」，可筛选
+6. **卡片增强**：库显示安装命令（从 package.json 校验真实包名）、自托管应用显示部署提示、所有项目显示维护状态
+
+> 💡 **建议配置 `GITHUB_TOKEN`**：匿名搜索限额为 10 次/分钟，配置后提升到 30 次/分钟，按功能搜索体验会稳定很多。见下方配置说明。
 
 ---
 
@@ -87,7 +112,7 @@ docker run -p 3000:3000 -e GITHUB_TOKEN=ghp_可选token github-popular-projects
 
 | 变量           | 是否必填 | 说明                                       |
 | -------------- | -------- | ------------------------------------------ |
-| `GITHUB_TOKEN` | 否       | 个人访问令牌，用于提升 GitHub API 频率上限 |
+| `GITHUB_TOKEN` | 否（强烈建议） | 个人访问令牌。匿名搜索限额 10 次/分钟，配置后 30 次/分钟；「按功能找项目」会一次发多个查询，建议配置 |
 | `PORT`         | 否       | 生产服务器端口（默认 `3000`）              |
 | `HTTPS_PROXY`  | 否       | 服务端出站代理。github.com 需代理才能访问的网络环境（如国内本地运行）时设置为 `http://127.0.0.1:7890` 一类的本地代理地址；海外服务器留空即直连 |
 
@@ -104,11 +129,13 @@ src/
     layout.tsx          根布局 + 页面元信息
     globals.css         Tailwind + 基础样式
     api/
-      trending/route.ts GET /api/trending?since=&language=
+      trending/route.ts GET /api/trending?sort=&language=&page=
       search/route.ts   GET /api/search?q=&language=&sort=&minStars=&page=
+      components/route.ts GET /api/components?need=&kind=&language=&minStars=
   components/
-    Explorer.tsx        模式标签、筛选器、搜索表单、结果网格
-    ProjectCard.tsx     单个仓库卡片
+    Explorer.tsx        模式标签、榜单筛选、搜索表单、结果网格
+    FindProjects.tsx    按功能找项目（需求输入、类型筛选、结果）
+    ProjectCard.tsx     单个仓库卡片（含类型/安装命令/维护状态）
     Skeleton.tsx        加载骨架屏
     ThemeProvider.tsx   深色/浅色主题上下文
     ThemeToggle.tsx     主题切换按钮
@@ -116,6 +143,9 @@ src/
     LocaleToggle.tsx    语言切换按钮
   lib/
     github.ts           数据层：GitHub Search + Trending（cheerio 解析）
+    function-dictionary.ts 中英功能词典（需求 → 英文检索词）
+    function-search.ts  按功能检索：多查询合并、过滤、相关性排序
+    repo-kind.ts        项目类型识别、安装/部署提示、维护状态
     ssrf.ts             出站请求防护（拦截内网/环回等私有地址）
     cache.ts            内存 TTL 缓存
     languages.ts        语言列表 + GitHub Linguist 语言配色
@@ -164,9 +194,11 @@ Built with **Next.js 15 + TypeScript + Tailwind CSS**. Runs anywhere Node or Doc
 
 ### Features
 
-- **Trending lists** — today / this week / this month, filterable by 20+ languages
+- **Trending lists** — stars gained today / this week / this month (official Trending scope), filterable by 20+ languages
+- **All-time top** — every GitHub repo ranked by total stars
+- **Find projects by need** — describe what you need in Chinese or English; queries are translated and expanded automatically, returning libraries, apps, CLIs and more
 - **Search** — keyword, language, sort (best match / forks / recently updated), minimum stars
-- **Rich project cards** — owner, description, stars, forks, language, topics, license, "stars today" badge
+- **Rich project cards** — owner, description, stars, forks, language, topics, license, stars-gained badge, project kind, install command, maintenance status
 - **Dark / light theme** with system-preference detection
 - **Chinese / English UI**, Chinese by default, toggle in the top-right
 - **Server-side caching** to stay within GitHub rate limits

@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ProjectCard } from "@/components/ProjectCard";
 import { SkeletonGrid } from "@/components/Skeleton";
+import { FindProjects } from "@/components/FindProjects";
 import { useLocale } from "@/components/LocaleProvider";
 import { LANGUAGES } from "@/lib/languages";
 import type {
@@ -11,7 +12,7 @@ import type {
   TrendingSortKey,
 } from "@/lib/types";
 
-type Mode = "trending" | "search";
+type Mode = "trending" | "search" | "find";
 
 const TREND_DIMS: { value: TrendingSortKey; key: "trendDaily" | "trendWeekly" | "trendMonthly" | "trendTop" }[] = [
   { value: "daily", key: "trendDaily" },
@@ -201,17 +202,32 @@ export function Explorer() {
 
   const labelClass = "mb-1 block text-xs font-medium text-gray-500 dark:text-gray-400";
 
+  const tabs = (
+    <div className="mb-6 flex items-center gap-1 rounded-lg border border-gray-200 bg-white p-1 dark:border-gray-800 dark:bg-gray-900">
+      <button type="button" onClick={() => switchMode("trending")} className={tabClass(mode === "trending")}>
+        {t("modeTrending")}
+      </button>
+      <button type="button" onClick={() => switchMode("search")} className={tabClass(mode === "search")}>
+        {t("modeSearch")}
+      </button>
+      <button type="button" onClick={() => switchMode("find")} className={tabClass(mode === "find")}>
+        {t("modeFind")}
+      </button>
+    </div>
+  );
+
+  if (mode === "find") {
+    return (
+      <div>
+        {tabs}
+        <FindProjects />
+      </div>
+    );
+  }
+
   return (
     <div>
-      {/* Mode tabs */}
-      <div className="mb-6 flex items-center gap-1 rounded-lg border border-gray-200 bg-white p-1 dark:border-gray-800 dark:bg-gray-900">
-        <button type="button" onClick={() => switchMode("trending")} className={tabClass(mode === "trending")}>
-          {t("modeTrending")}
-        </button>
-        <button type="button" onClick={() => switchMode("search")} className={tabClass(mode === "search")}>
-          {t("modeSearch")}
-        </button>
-      </div>
+      {tabs}
 
       {mode === "trending" ? (
         <div className="mb-6 flex flex-wrap items-center gap-3">
