@@ -1,10 +1,13 @@
 # syntax=docker/dockerfile:1
 
 # ---- Dependencies ----
+# Install ALL dependencies here: `next build` needs devDependencies
+# (typescript, tailwindcss, @tailwindcss/postcss). The runtime image only
+# receives the traced standalone output, so dev deps never reach production.
 FROM node:22-alpine AS deps
 WORKDIR /app
 COPY package.json package-lock.json* ./
-RUN npm ci --omit=dev || npm install --omit=dev
+RUN npm ci || npm install
 
 # ---- Build ----
 FROM node:22-alpine AS builder

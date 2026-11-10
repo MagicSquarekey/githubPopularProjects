@@ -4,6 +4,9 @@
   "private": true,
   "description": "An open-source site to discover trending GitHub projects — browse trending lists and search by language, stars, and keywords.",
   "license": "MIT",
+  "engines": {
+    "node": ">=20.0.0"
+  },
   "scripts": {
     "dev": "next dev",
     "build": "next build",

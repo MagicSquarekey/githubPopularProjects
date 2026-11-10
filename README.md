@@ -86,6 +86,94 @@ npm start            # 监听 http://localhost:3000  (serves on port 3000)
 
 ---
 
+## 🐧 Ubuntu 服务器部署
+
+### 1. 安装 Node.js 20+
+
+```bash
+sudo apt update && sudo apt install -y git curl
+curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
+sudo apt install -y nodejs
+node -v   # 应 >= v20
+```
+
+### 2. 拉取并构建
+
+```bash
+git clone https://github.com/MagicSquarekey/githubPopularProjects.git
+cd githubPopularProjects
+
+npm ci                 # 按 package-lock 精确安装
+cp .env.example .env.local
+#   编辑 .env.local，填入 GITHUB_TOKEN
+#   服务器一般能直连 GitHub，不要设置 HTTPS_PROXY
+
+npm run build
+npm start              # 默认监听 0.0.0.0:3000
+```
+
+> ⚠️ **不要把 Windows 上的 `.env.local` 直接拷到服务器**：里面通常是本机代理
+> `HTTPS_PROXY=http://127.0.0.1:7890`，在服务器上无效并会导致请求失败。
+> 请用 `.env.example` 重新生成，只填 `GITHUB_TOKEN`。
+
+### 3. 用 systemd 托管（开机自启、崩溃重启）
+
+```ini
+# /etc/systemd/system/github-popular-projects.service
+[Unit]
+Description=githubPopularProjects
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/githubPopularProjects
+Environment=NODE_ENV=production
+Environment=PORT=3000
+ExecStart=/usr/bin/npm start
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+```
+
+```bash
+sudo systemctl daemon-reload
+sudo systemctl enable --now github-popular-projects
+sudo systemctl status github-popular-projects
+```
+
+### 4. Nginx 反向代理（可选，配域名/HTTPS）
+
+```nginx
+server {
+    listen 80;
+    server_name your-domain.com;
+
+    location / {
+        proxy_pass http://127.0.0.1:3000;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+}
+```
+
+> 说明：因为项目使用 `output: "standalone"`，`npm start` 会打印一条
+> "next start does not work with output: standalone" 的**警告**，但服务实际正常。
+> 更推荐用上面的 Docker 方式（`node server.js`），或直接 `npm start` 也可以。
+
+### 5. 防火墙
+
+```bash
+sudo ufw allow 3000/tcp     # 直接暴露 3000
+# 或用 Nginx 时只开 80/443，3000 不对公网开放
+```
+
+---
+
 ## 🐳 Docker（推荐用于服务器）
 
 需要 [Docker](https://www.docker.com/) 与 Docker Compose。

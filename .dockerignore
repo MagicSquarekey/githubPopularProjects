@@ -11,3 +11,8 @@ build
 Dockerfile
 docker-compose.yml
 .dockerignore
+# editor / local-agent state
+.zcode
+.mimosa
+# Windows-only helpers
+start.bat
